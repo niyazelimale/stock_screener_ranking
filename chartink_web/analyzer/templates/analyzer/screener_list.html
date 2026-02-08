@@ -1,0 +1,61 @@
+{% extends 'analyzer/base.html' %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h2 class="fw-bold">Screener Configuration</h2>
+    <div>
+        <a href="{% url 'screener_import' %}" class="btn btn-outline-secondary me-2">
+            <i class="bi bi-filetype-json me-1"></i>Import JSON
+        </a>
+        <a href="{% url 'screener_add' %}" class="btn btn-success">
+            <i class="bi bi-plus-lg me-1"></i>Add New Screener
+        </a>
+    </div>
+</div>
+
+<div class="card shadow-sm">
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-hover mb-0">
+                <thead class="bg-light">
+                    <tr>
+                        <th class="ps-4">Name</th>
+                        <th>URL</th>
+                        <th class="text-center">Active</th>
+                        <th class="text-end pe-4">Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for screener in screeners %}
+                    <tr>
+                        <td class="ps-4 fw-medium">{{ screener.name|default:"Un-named" }}</td>
+                        <td><a href="{{ screener.url }}" target="_blank"
+                                class="text-decoration-none text-muted small">{{ screener.url|truncatechars:60 }}</a>
+                        </td>
+                        <td class="text-center">
+                            {% if screener.is_active %}
+                            <span class="badge bg-success rounded-pill">Active</span>
+                            {% else %}
+                            <span class="badge bg-secondary rounded-pill">Inactive</span>
+                            {% endif %}
+                        </td>
+                        <td class="text-end pe-4">
+                            <a href="{% url 'screener_edit' screener.id %}"
+                                class="btn btn-sm btn-outline-primary me-1"><i class="bi bi-pencil"></i></a>
+                            <a href="{% url 'screener_delete' screener.id %}" class="btn btn-sm btn-outline-danger"><i
+                                    class="bi bi-trash"></i></a>
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="4" class="text-center py-5 text-muted">
+                            No screeners configured. Import from JSON or add one manually.
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}

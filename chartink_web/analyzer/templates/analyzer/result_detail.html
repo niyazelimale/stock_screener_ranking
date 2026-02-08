@@ -1,0 +1,62 @@
+{% extends 'analyzer/base.html' %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col-md-12">
+        <nav aria-label="breadcrumb">
+            <ol class="breadcrumb">
+                <li class="breadcrumb-item"><a href="{% url 'dashboard' %}">Dashboard</a></li>
+                <li class="breadcrumb-item active" aria-current="page">Scan Results ({{ job.completed_at|date:"M d, Y H:i" }})</li>
+            </ol>
+        </nav>
+        <h2 class="fw-bold">Scan Results</h2>
+    </div>
+</div>
+
+<div class="card shadow-sm">
+    <div class="card-header bg-white border-bottom-0">
+        <ul class="nav nav-tabs card-header-tabs" id="resultTabs" role="tablist">
+            <li class="nav-item" role="presentation">
+                <button class="nav-link active fw-bold" id="all-tab" data-bs-toggle="tab" data-bs-target="#all"
+                    type="button" role="tab">
+                    All Stocks <span class="badge bg-secondary ms-1">{{ total_count }}</span>
+                </button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link fw-bold text-warning" id="high-conviction-tab" data-bs-toggle="tab"
+                    data-bs-target="#high-conviction" type="button" role="tab">
+                    <i class="bi bi-star-fill me-1"></i>High Conviction <span class="badge bg-warning text-dark ms-1">{{ high_conviction_count }}</span>
+                </button>
+            </li>
+            {% for screener_id, data in screener_groups.items %}
+            <li class="nav-item" role="presentation">
+                <button class="nav-link" id="screener-{{ screener_id }}-tab" data-bs-toggle="tab"
+                    data-bs-target="#screener-{{ screener_id }}" type="button" role="tab">
+                    {{ data.name }} <span class="badge bg-light text-dark border ms-1">{{ data.count }}</span>
+                </button>
+            </li>
+            {% endfor %}
+        </ul>
+    </div>
+    <div class="card-body">
+        <div class="tab-content" id="resultTabsContent">
+            <!-- All Stocks Tab -->
+            <div class="tab-pane fade show active" id="all" role="tabpanel">
+                {% include 'analyzer/includes/stock_table.html' with stocks=all_stocks %}
+            </div>
+
+            <!-- High Conviction Tab -->
+            <div class="tab-pane fade" id="high-conviction" role="tabpanel">
+                {% include 'analyzer/includes/stock_table.html' with stocks=high_conviction_stocks %}
+            </div>
+
+            <!-- Individual Screener Tabs -->
+            {% for screener_id, data in screener_groups.items %}
+            <div class="tab-pane fade" id="screener-{{ screener_id }}" role="tabpanel">
+                {% include 'analyzer/includes/stock_table.html' with stocks=data.stocks %}
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+</div>
+{% endblock %}
