@@ -27,6 +27,20 @@ class ScanJob(models.Model):
     def __str__(self):
         return f"ScanJob {self.id} - {self.status}"
 
+class GlobalSettings(models.Model):
+    min_ranking_threshold = models.IntegerField(default=2, help_text="Minimum number of screeners for high conviction")
+    
+    class Meta:
+        verbose_name_plural = "Global Settings"
+
+    def __str__(self):
+        return "Global Settings"
+
+    @classmethod
+    def get_setting(cls):
+        obj, created = cls.objects.get_or_create(id=1)
+        return obj
+
 class StockResult(models.Model):
     job = models.ForeignKey(ScanJob, on_delete=models.CASCADE, related_name='results')
     screener = models.ForeignKey(Screener, on_delete=models.CASCADE, related_name='results')

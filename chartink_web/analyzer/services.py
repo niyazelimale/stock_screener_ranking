@@ -91,12 +91,16 @@ class ChartinkScanner:
             self.log("Calculating high conviction stocks...")
             self.update_progress(95)
             
+            from .models import GlobalSettings
+            settings = GlobalSettings.get_setting()
+            threshold = settings.min_ranking_threshold
+            
             stock_counts = Counter(all_results)
-            high_conviction_symbols = [symbol for symbol, count in stock_counts.items() if count > 1]
+            high_conviction_symbols = [symbol for symbol, count in stock_counts.items() if count >= threshold]
             
             if high_conviction_symbols:
                 StockResult.objects.filter(job=self.job, symbol__in=high_conviction_symbols).update(is_high_conviction=True)
-                self.log(f"Identified {len(high_conviction_symbols)} high conviction stocks.")
+                self.log(f"Identified {len(high_conviction_symbols)} high conviction stocks (Threshold: {threshold}).")
             
             self.job.status = 'COMPLETED'
             self.job.completed_at = timezone.now()

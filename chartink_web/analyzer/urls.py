@@ -12,4 +12,5 @@ urlpatterns = [
     path('config/edit/<int:id>/', views.screener_edit, name='screener_edit'),
     path('config/delete/<int:id>/', views.screener_delete, name='screener_delete'),
     path('config/import/', views.screener_import, name='screener_import'),
+    path('settings/update/', views.update_settings, name='update_settings'),
 ]

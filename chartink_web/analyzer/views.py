@@ -5,7 +5,7 @@ from django.contrib import messages
 from django.urls import reverse
 from django.db import models
 from django.db.models import Count
-from .models import Screener, ScanJob, StockResult
+from .models import Screener, ScanJob, StockResult, GlobalSettings
 from .services import ChartinkScanner
 import threading
 import json
@@ -15,25 +15,30 @@ def dashboard(request):
     # Get the most recent completed job for stats
     recent_job = ScanJob.objects.filter(status='COMPLETED').order_by('-completed_at').first()
     
+    settings = GlobalSettings.get_setting()
+    threshold = settings.min_ranking_threshold
+    
     high_conviction_stocks = []
     high_conviction_count = 0
     
     if recent_job:
-        # Group by symbol, count occurrences, and order by count descending
+        # Group by symbol for high conviction stocks (matching detail page logic)
         high_conviction_stocks = StockResult.objects.filter(
-            job=recent_job
+            job=recent_job,
+            is_high_conviction=True
         ).values('symbol').annotate(
             screener_count=Count('screener'),
             close_price=models.Max('close_price'), 
             volume=models.Max('volume')
-        ).filter(screener_count__gt=1).order_by('-screener_count')
+        ).filter(screener_count__gte=threshold).order_by('-screener_count', 'symbol')
         
         high_conviction_count = len(high_conviction_stocks)
 
     context = {
         'recent_job': recent_job,
-        'high_conviction_stocks': high_conviction_stocks[:10], # Show top 10 unique ranked
-        'high_conviction_count': high_conviction_count
+        'high_conviction_stocks': high_conviction_stocks, # Show all unique ranked stocks meeting threshold
+        'high_conviction_count': high_conviction_count,
+        'threshold': threshold
     }
     return render(request, 'analyzer/dashboard.html', context)
 
@@ -63,7 +68,11 @@ def scan_status(request, job_id):
 
 def screener_list(request):
     screeners = Screener.objects.all().order_by('-is_active', 'name')
-    return render(request, 'analyzer/screener_list.html', {'screeners': screeners})
+    threshold = GlobalSettings.get_setting().min_ranking_threshold
+    return render(request, 'analyzer/screener_list.html', {
+        'screeners': screeners,
+        'threshold': threshold
+    })
 
 def screener_add(request):
     if request.method == 'POST':
@@ -117,16 +126,37 @@ def screener_import(request):
 
 def result_detail(request, job_id):
     job = get_object_or_404(ScanJob, id=job_id)
-    all_stocks = StockResult.objects.filter(job=job).select_related('screener')
     
-    # High Conviction (Unique symbols)
-    high_conviction_qs = all_stocks.filter(is_high_conviction=True)
+    # Calculate screener_count for each symbol
+    symbol_counts = StockResult.objects.filter(job=job).values('symbol').annotate(
+        screener_count=Count('screener')
+    )
+    
+    # Create a dictionary for quick lookup
+    count_map = {item['symbol']: item['screener_count'] for item in symbol_counts}
+    
+    # Get all stocks and annotate with screener_count
+    all_stocks = list(StockResult.objects.filter(job=job).select_related('screener'))
+    for stock in all_stocks:
+        stock.screener_count = count_map.get(stock.symbol, 1)
+    
+    # Sort all stocks by screener_count descending
+    all_stocks.sort(key=lambda x: x.screener_count, reverse=True)
+    
+    # High Conviction (Unique symbols, sorted by screener_count)
+    settings = GlobalSettings.get_setting()
+    threshold = settings.min_ranking_threshold
+    
+    high_conviction_qs = [s for s in all_stocks if s.screener_count >= threshold]
     seen = set()
     high_conviction_stocks = []
     for s in high_conviction_qs:
         if s.symbol not in seen:
             high_conviction_stocks.append(s)
             seen.add(s.symbol)
+    
+    # Sort high conviction by screener_count (desc) then symbol (asc)
+    high_conviction_stocks.sort(key=lambda x: (-x.screener_count, x.symbol))
             
     # Group by Screener for tabs
     screener_groups = {}
@@ -140,6 +170,10 @@ def result_detail(request, job_id):
             }
         screener_groups[sid]['stocks'].append(stock)
         screener_groups[sid]['count'] += 1
+    
+    # Sort stocks within each screener group by screener_count
+    for sid in screener_groups:
+        screener_groups[sid]['stocks'].sort(key=lambda x: x.screener_count, reverse=True)
         
     context = {
         'job': job,
@@ -147,6 +181,15 @@ def result_detail(request, job_id):
         'high_conviction_stocks': high_conviction_stocks,
         'high_conviction_count': len(high_conviction_stocks),
         'screener_groups': screener_groups,
-        'total_count': all_stocks.count()
+        'total_count': len(all_stocks)
     }
     return render(request, 'analyzer/result_detail.html', context)
+@require_POST
+def update_settings(request):
+    threshold = request.POST.get('min_ranking_threshold')
+    if threshold:
+        settings = GlobalSettings.get_setting()
+        settings.min_ranking_threshold = int(threshold)
+        settings.save()
+        messages.success(request, f'Threshold updated to {threshold}.')
+    return redirect('screener_list')

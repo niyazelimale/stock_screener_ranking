@@ -18,6 +18,7 @@
     </div>
 </div>
 
+
 <!-- Progress Bar (Hidden by default) -->
 <div class="row justify-content-center mb-5" id="progressContainer" style="display: none;">
     <div class="col-md-8">
@@ -37,8 +38,11 @@
     <div class="col-md-12">
         <div class="card">
             <div class="card-header bg-white py-3 border-0">
-                <h4 class="mb-0 fw-bold"><i class="bi bi-star-fill text-warning me-2"></i>High Conviction Stocks <span
-                        class="badge bg-primary ms-2">{{ high_conviction_count }}</span></h4>
+                <h4 class="mb-0 fw-bold">
+                    <i class="bi bi-star-fill text-warning me-2"></i>High Conviction Stocks
+                    <span class="badge bg-primary ms-2">{{ high_conviction_count }}</span>
+                    <span class="badge bg-light text-dark border ms-2" style="font-size: 0.7rem;">Rank ≥ {{ threshold }}</span>
+                </h4>
             </div>
             <div class="card-body">
                 {% if recent_job %}
@@ -53,8 +57,7 @@
                                 <th>Symbol</th>
                                 <th>Price</th>
                                 <th>Volume</th>
-                                <th>Volume</th>
-                                <th>Screeners</th>
+                                <th>Ranking</th>
                             </tr>
                         </thead>
                         <tbody>

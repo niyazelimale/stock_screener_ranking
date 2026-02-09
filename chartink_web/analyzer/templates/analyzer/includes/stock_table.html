@@ -6,6 +6,7 @@
                 <th>Name</th>
                 <th>Price</th>
                 <th>Volume</th>
+                <th>Ranking</th>
                 <th>Source</th>
             </tr>
         </thead>
@@ -22,12 +23,15 @@
                 <td>{{ stock.close_price }}</td>
                 <td>{{ stock.volume }}</td>
                 <td>
+                    <span class="badge bg-success rounded-pill">{{ stock.screener_count|default:"1" }}</span>
+                </td>
+                <td>
                     <span class="badge bg-light text-dark border">{{ stock.screener.name|default:"Screener" }}</span>
                 </td>
             </tr>
             {% empty %}
             <tr>
-                <td colspan="5" class="text-center py-4 text-muted">No stocks found in this category.</td>
+                <td colspan="6" class="text-center py-4 text-muted">No stocks found in this category.</td>
             </tr>
             {% endfor %}
         </tbody>

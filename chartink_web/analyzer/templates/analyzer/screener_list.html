@@ -13,6 +13,29 @@
     </div>
 </div>
 
+<!-- Threshold Configuration -->
+<div class="card shadow-sm mb-4">
+    <div class="card-body">
+        <form action="{% url 'update_settings' %}" method="POST" class="row g-3 align-items-center">
+            {% csrf_token %}
+            <div class="col-auto">
+                <label for="min_ranking_threshold" class="col-form-label fw-bold">High Conviction Threshold:</label>
+            </div>
+            <div class="col-auto">
+                <input type="number" id="min_ranking_threshold" name="min_ranking_threshold" class="form-control"
+                    value="{{ threshold }}" min="1" max="10" style="width: 80px;">
+            </div>
+            <div class="col-auto">
+                <button type="submit" class="btn btn-primary">Update Threshold</button>
+            </div>
+            <div class="col-auto text-muted small ms-3">
+                <i class="bi bi-info-circle me-1"></i> Stocks appearing in {{ threshold }} or more screeners will be
+                marked as High Conviction.
+            </div>
+        </form>
+    </div>
+</div>
+
 <div class="card shadow-sm">
     <div class="card-body p-0">
         <div class="table-responsive">
