@@ -13,4 +13,7 @@ urlpatterns = [
     path('config/delete/<int:id>/', views.screener_delete, name='screener_delete'),
     path('config/import/', views.screener_import, name='screener_import'),
     path('settings/update/', views.update_settings, name='update_settings'),
+    
+    path('new-stocks/', views.new_stocks_view, name='new_stocks'),
+    path('download-csv/<int:job_id>/', views.download_csv, name='download_csv'),
 ]

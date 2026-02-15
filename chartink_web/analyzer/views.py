@@ -1,12 +1,12 @@
 from django.shortcuts import render, redirect, get_object_or_404
-from django.http import JsonResponse
+from django.http import JsonResponse, HttpResponse, FileResponse
 from django.views.decorators.http import require_POST
 from django.contrib import messages
 from django.urls import reverse
 from django.db import models
 from django.db.models import Count
-from .models import Screener, ScanJob, StockResult, GlobalSettings
-from .services import ChartinkScanner
+from .models import Screener, ScanJob, StockResult, GlobalSettings, ScanReport
+from .services import ChartinkScanner, find_new_stocks
 import threading
 import json
 import os
@@ -34,11 +34,17 @@ def dashboard(request):
         
         high_conviction_count = len(high_conviction_stocks)
 
+    # Get CSV report info if available
+    csv_report = None
+    if recent_job:
+        csv_report = ScanReport.objects.filter(job=recent_job).first()
+    
     context = {
         'recent_job': recent_job,
         'high_conviction_stocks': high_conviction_stocks, # Show all unique ranked stocks meeting threshold
         'high_conviction_count': high_conviction_count,
-        'threshold': threshold
+        'threshold': threshold,
+        'csv_report': csv_report
     }
     return render(request, 'analyzer/dashboard.html', context)
 
@@ -193,3 +199,53 @@ def update_settings(request):
         settings.save()
         messages.success(request, f'Threshold updated to {threshold}.')
     return redirect('screener_list')
+
+def new_stocks_view(request):
+    """
+    Display stocks that are new in the latest scan compared to a week-old scan.
+    """
+    # Get the most recent completed job
+    recent_job = ScanJob.objects.filter(status='COMPLETED').order_by('-completed_at').first()
+    
+    if not recent_job:
+        context = {
+            'error_message': 'No completed scans found. Please run a scan first.'
+        }
+        return render(request, 'analyzer/new_stocks.html', context)
+    
+    # Get comparison data
+    comparison_data, error = find_new_stocks(recent_job.id)
+    
+    if error:
+        context = {
+            'error_message': error,
+            'recent_job': recent_job
+        }
+        return render(request, 'analyzer/new_stocks.html', context)
+    
+    context = {
+        'recent_job': recent_job,
+        'new_stocks': comparison_data['new_stocks'],
+        'new_count': comparison_data['new_count'],
+        'latest_scan_date': comparison_data['latest_scan_date'],
+        'comparison_scan_date': comparison_data['comparison_scan_date'],
+        'latest_total': comparison_data['latest_total'],
+        'old_total': comparison_data['old_total']
+    }
+    return render(request, 'analyzer/new_stocks.html', context)
+
+def download_csv(request, job_id):
+    """
+    Download the CSV report for a specific job.
+    """
+    job = get_object_or_404(ScanJob, id=job_id)
+    report = get_object_or_404(ScanReport, job=job)
+    
+    if not os.path.exists(report.csv_file_path):
+        return HttpResponse('CSV file not found.', status=404)
+    
+    # Serve the file
+    response = FileResponse(open(report.csv_file_path, 'rb'), content_type='text/csv')
+    filename = os.path.basename(report.csv_file_path)
+    response['Content-Disposition'] = f'attachment; filename="{filename}"'
+    return response

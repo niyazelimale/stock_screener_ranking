@@ -2,10 +2,13 @@ import json
 import time
 import requests
 import traceback
-from datetime import datetime
+import csv
+import os
+from datetime import datetime, timedelta
 from collections import Counter
 from django.utils import timezone
-from .models import Screener, ScanJob, StockResult
+from django.conf import settings
+from .models import Screener, ScanJob, StockResult, ScanReport
 
 # Selenium Imports
 from selenium import webdriver
@@ -101,6 +104,13 @@ class ChartinkScanner:
             if high_conviction_symbols:
                 StockResult.objects.filter(job=self.job, symbol__in=high_conviction_symbols).update(is_high_conviction=True)
                 self.log(f"Identified {len(high_conviction_symbols)} high conviction stocks (Threshold: {threshold}).")
+            
+            # Export to CSV
+            self.log("Exporting results to CSV...")
+            self.update_progress(98)
+            csv_path = self.export_to_csv()
+            if csv_path:
+                self.log(f"CSV report saved: {csv_path}")
             
             self.job.status = 'COMPLETED'
             self.job.completed_at = timezone.now()
@@ -256,3 +266,116 @@ class ChartinkScanner:
         finally:
             if driver:
                 driver.quit()
+    
+    def export_to_csv(self):
+        """
+        Export scan results to CSV file with timestamp.
+        Returns the file path if successful, None otherwise.
+        """
+        try:
+            # Create scan_reports directory if it doesn't exist
+            base_dir = settings.BASE_DIR.parent if hasattr(settings.BASE_DIR, 'parent') else os.path.dirname(settings.BASE_DIR)
+            reports_dir = os.path.join(base_dir, 'scan_reports')
+            os.makedirs(reports_dir, exist_ok=True)
+            
+            # Generate filename with timestamp
+            timestamp = datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
+            filename = f'scan_report_{timestamp}.csv'
+            filepath = os.path.join(reports_dir, filename)
+            
+            # Get all results with screener counts
+            from django.db.models import Count
+            results = StockResult.objects.filter(job=self.job).values(
+                'symbol', 'name', 'nse_code', 'bse_code', 'close_price', 'volume', 'is_high_conviction'
+            ).annotate(screener_count=Count('screener')).order_by('-screener_count', 'symbol')
+            
+            # Write to CSV
+            with open(filepath, 'w', newline='', encoding='utf-8') as csvfile:
+                fieldnames = ['Symbol', 'Name', 'NSE Code', 'BSE Code', 'Close Price', 'Volume', 'Screener Count', 'High Conviction']
+                writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
+                
+                writer.writeheader()
+                for result in results:
+                    writer.writerow({
+                        'Symbol': result['symbol'],
+                        'Name': result['name'],
+                        'NSE Code': result['nse_code'] or '',
+                        'BSE Code': result['bse_code'] or '',
+                        'Close Price': result['close_price'] or '',
+                        'Volume': result['volume'] or '',
+                        'Screener Count': result['screener_count'],
+                        'High Conviction': 'Yes' if result['is_high_conviction'] else 'No'
+                    })
+            
+            # Save report metadata
+            high_conviction_count = results.filter(is_high_conviction=True).values('symbol').distinct().count()
+            ScanReport.objects.create(
+                job=self.job,
+                csv_file_path=filepath,
+                total_stocks=results.values('symbol').distinct().count(),
+                high_conviction_count=high_conviction_count
+            )
+            
+            return filepath
+            
+        except Exception as e:
+            self.log(f"Error exporting to CSV: {str(e)}")
+            return None
+
+
+def find_new_stocks(latest_job_id):
+    """
+    Compare the latest scan with a scan from approximately one week ago (6+ days).
+    Returns a list of symbols that are new in the latest scan.
+    """
+    try:
+        # Get the latest job's report
+        latest_report = ScanReport.objects.filter(job_id=latest_job_id).first()
+        if not latest_report:
+            return None, "No report found for the latest scan."
+        
+        # Find a report from 6+ days ago
+        week_ago = timezone.now() - timedelta(days=6)
+        old_report = ScanReport.objects.filter(
+            created_at__lte=week_ago
+        ).order_by('-created_at').first()
+        
+        if not old_report:
+            return None, "No scan data from 6+ days ago found."
+        
+        # Get symbols from latest scan
+        latest_symbols = set(
+            StockResult.objects.filter(job_id=latest_job_id).values_list('symbol', flat=True).distinct()
+        )
+        
+        # Get symbols from week-old scan
+        old_symbols = set(
+            StockResult.objects.filter(job_id=old_report.job_id).values_list('symbol', flat=True).distinct()
+        )
+        
+        # Find new symbols
+        new_symbols = latest_symbols - old_symbols
+        
+        # Get full details for new symbols from latest scan
+        from django.db.models import Count, Max
+        new_stocks = StockResult.objects.filter(
+            job_id=latest_job_id,
+            symbol__in=new_symbols
+        ).values('symbol', 'name', 'nse_code', 'bse_code').annotate(
+            screener_count=Count('screener'),
+            close_price=Max('close_price'),
+            volume=Max('volume'),
+            is_high_conviction=Max('is_high_conviction')
+        ).order_by('-screener_count', 'symbol')
+        
+        return {
+            'new_stocks': list(new_stocks),
+            'latest_scan_date': latest_report.created_at,
+            'comparison_scan_date': old_report.created_at,
+            'new_count': len(new_symbols),
+            'latest_total': len(latest_symbols),
+            'old_total': len(old_symbols)
+        }, None
+        
+    except Exception as e:
+        return None, f"Error comparing scans: {str(e)}"

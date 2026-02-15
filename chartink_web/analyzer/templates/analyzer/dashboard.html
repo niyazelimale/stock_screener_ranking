@@ -95,6 +95,35 @@
     </div>
 </div>
 
+<!-- CSV Report Download Section -->
+{% if csv_report %}
+<div class="row mt-4">
+    <div class="col-md-12">
+        <div class="card">
+            <div class="card-header bg-white py-3 border-0">
+                <h5 class="mb-0 fw-bold">
+                    <i class="bi bi-file-earmark-spreadsheet text-success me-2"></i>CSV Report
+                </h5>
+            </div>
+            <div class="card-body">
+                <div class="row align-items-center">
+                    <div class="col-md-8">
+                        <p class="mb-1"><strong>Generated:</strong> {{ csv_report.created_at|date:"Y-m-d H:i" }}</p>
+                        <p class="mb-1"><strong>Total Stocks:</strong> {{ csv_report.total_stocks }}</p>
+                        <p class="mb-0"><strong>High Conviction:</strong> {{ csv_report.high_conviction_count }}</p>
+                    </div>
+                    <div class="col-md-4 text-end">
+                        <a href="{% url 'download_csv' recent_job.id %}" class="btn btn-success">
+                            <i class="bi bi-download me-2"></i>Download CSV
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+
 {% endblock %}
 
 {% block extra_js %}

@@ -54,3 +54,16 @@ class StockResult(models.Model):
     
     def __str__(self):
         return f"{self.symbol} - {self.close_price}"
+
+class ScanReport(models.Model):
+    job = models.OneToOneField(ScanJob, on_delete=models.CASCADE, related_name='report')
+    csv_file_path = models.CharField(max_length=500, help_text="Path to the CSV report file")
+    created_at = models.DateTimeField(auto_now_add=True)
+    total_stocks = models.IntegerField(default=0, help_text="Total number of stocks in this scan")
+    high_conviction_count = models.IntegerField(default=0, help_text="Number of high conviction stocks")
+    
+    class Meta:
+        ordering = ['-created_at']
+    
+    def __str__(self):
+        return f"Report for Job {self.job.id} - {self.created_at.strftime('%Y-%m-%d %H:%M')}"
